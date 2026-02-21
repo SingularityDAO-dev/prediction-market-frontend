@@ -1,250 +1,160 @@
-# Frontend Integration Guide
+# Prediction Market - Frontend Integration Guide
 
 ## API Base URL
 ```
 Production: https://prediction-market-backend-production-4e85.up.railway.app
-Local: http://localhost:3000
+Swagger UI: https://prediction-market-backend-production-4e85.up.railway.app/api
+Scalar UI: https://prediction-market-backend-production-4e85.up.railway.app/scalar
 ```
 
-## API Endpoints
+## Core API Endpoints
 
-### Markets
+### 1. Markets
 ```typescript
 // List all markets
 GET /markets
+Response: Market[]
 
-// Get market by condition ID
+// Get single market
 GET /markets/:conditionId
+Response: Market
 
-// Create new market
+// Create market (admin/operator)
 POST /markets
 Body: {
-  conditionId: string;
-  questionId: string;
-  yesTokenId: string;
-  noTokenId: string;
-  collateral: string;
-  oracle: string;
+  conditionId: string;  // bytes32
+  questionId: string;   // bytes32  
+  yesTokenId: string;   // uint256
+  noTokenId: string;    // uint256
+  collateral: string;   // ERC20 address
+  oracle: string;       // oracle address
 }
 
-// Update market (set expiration, etc)
+// Update market (set expiration)
 PATCH /markets/:conditionId
 Body: {
-  expirationDate?: string;
+  expirationDate?: string; // ISO date
   status?: "ACTIVE" | "PAUSED" | "RESOLVED";
 }
 
 // Get orderbook
 GET /markets/:conditionId/orderbook
+Response: {
+  market: string;
+  timestamp: number;
+  bids: [{ price: string; size: string; numOrders: number }];
+  asks: [{ price: string; size: string; numOrders: number }];
+}
 
 // Get trades
 GET /markets/:conditionId/trades
+Response: Trade[]
 ```
 
-### Orders
+### 2. Orders (Trading)
 ```typescript
-// List all orders
-GET /orders
-
-// Get order by hash
-GET /orders/:hash
-
-// Create order
+// Submit order
 POST /orders
 Body: {
   order: {
-    salt: string;
-    maker: string;
-    signer: string;
-    taker: string;
-    tokenId: string;
-    makerAmount: string;
-    takerAmount: string;
-    expiration: number;
-    nonce: string;
-    feeRateBps: number;
-    side: 0 | 1;  // 0=BUY, 1=SELL
-    signatureType: 0 | 1 | 2 | 3;
+    salt: string;           // unique nonce
+    maker: string;          // wallet address
+    signer: string;         // signing address
+    taker: string;          // specific taker (0x0 for public)
+    tokenId: string;        // YES or NO token ID
+    makerAmount: string;    // amount in wei
+    takerAmount: string;    // amount in wei
+    expiration: number;     // unix timestamp
+    nonce: string;          // cancellation nonce
+    feeRateBps: number;     // 200 = 2%
+    side: 0 | 1;            // 0=BUY, 1=SELL
+    signatureType: 0;       // 0=EOA
   };
-  signature: string;
+  signature: string;        // EIP-712 signature
 }
 
+// List orders
+GET /orders?marketId=&side=&status=
+
+// Get order by hash
+GET /orders/:orderHash
+
 // Cancel order
-DELETE /orders/:hash
+DELETE /orders/:orderHash
 ```
 
-### Users
+### 3. User Data
 ```typescript
-// Get user balances
+// Get user balances (USDC + position tokens)
 GET /users/:address/balances
+Response: {
+  address: string;
+  balances: Record<string, string>;
+}
 
 // Get user orders
 GET /users/:address/orders
+Response: Order[]
 
-// Get user trades
+// Get user trades  
 GET /users/:address/trades
+Response: Trade[]
 ```
 
-### Operator (Auto-resolution)
+### 4. Operator (Auto-resolution)
 ```typescript
-// Get operator status
+// Operator status + job queue
 GET /operator/status
+Response: {
+  isProcessing: boolean;
+  pendingResolutions: number;
+  queuedJobs: { waiting: number; active: number; completed: number; failed: number };
+  lastSync: string;
+}
 
-// Get pending resolutions
+// Markets pending resolution
 GET /operator/pending-resolutions
+Response: {
+  count: number;
+  markets: [{ conditionId: string; questionId: string; expirationDate: string }];
+}
 
-// Manual resolve market
+// Manual resolve (admin/operator)
 POST /operator/resolve/:marketId
-
-// Sync blockchain events
-POST /operator/sync-events
+Response: { status: "resolved" | "pending"; transactionHash?: string; message?: string }
 
 // Poll UMA oracle
 POST /operator/poll-uma/:marketId
-```
+Response: number | null  // 0=NO, 1=YES, null=not settled
 
-## React Integration Example
-
-### 1. API Client Setup
-```typescript
-// lib/api.ts
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 
-  "https://prediction-market-backend-production-4e85.up.railway.app";
-
-export async function fetchMarkets() {
-  const res = await fetch(`${API_BASE}/markets`);
-  if (!res.ok) throw new Error("Failed to fetch markets");
-  return res.json();
-}
-
-export async function fetchMarket(conditionId: string) {
-  const res = await fetch(`${API_BASE}/markets/${conditionId}`);
-  if (!res.ok) throw new Error("Failed to fetch market");
-  return res.json();
-}
-
-export async function createOrder(orderData: any) {
-  const res = await fetch(`${API_BASE}/orders`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(orderData),
-  });
-  if (!res.ok) throw new Error("Failed to create order");
-  return res.json();
-}
-
-export async function fetchOrderbook(conditionId: string) {
-  const res = await fetch(`${API_BASE}/markets/${conditionId}/orderbook`);
-  if (!res.ok) throw new Error("Failed to fetch orderbook");
-  return res.json();
-}
-```
-
-### 2. React Hook Example
-```typescript
-// hooks/useMarkets.ts
-import { useState, useEffect } from "react";
-import { fetchMarkets } from "@/lib/api";
-
-export function useMarkets() {
-  const [markets, setMarkets] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    fetchMarkets()
-      .then(setMarkets)
-      .catch(setError)
-      .finally(() => setLoading(false));
-  }, []);
-
-  return { markets, loading, error };
-}
-```
-
-### 3. Component Integration
-```typescript
-// components/markets/MarketList.tsx
-"use client";
-
-import { useMarkets } from "@/hooks/useMarkets";
-import { MarketCard } from "./MarketCard";
-
-export function MarketList() {
-  const { markets, loading, error } = useMarkets();
-
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {markets.map((market) => (
-        <MarketCard key={market.conditionId} market={market} />
-      ))}
-    </div>
-  );
-}
-```
-
-### 4. Trading Integration
-```typescript
-// components/trading/TradingPanel.tsx
-"use client";
-
-import { useState } from "react";
-import { createOrder } from "@/lib/api";
-import { useWallet } from "@/hooks/useWallet"; // Your wallet hook
-
-export function TradingPanel({ marketId, tokenId }: { marketId: string; tokenId: string }) {
-  const [amount, setAmount] = useState("");
-  const [side, setSide] = useState<"buy" | "sell">("buy");
-  const { address, signOrder } = useWallet();
-
-  async function handleSubmit() {
-    const order = {
-      salt: Date.now().toString(),
-      maker: address,
-      signer: address,
-      taker: "0x0000000000000000000000000000000000000000",
-      tokenId,
-      makerAmount: side === "buy" ? amount : "0",
-      takerAmount: side === "sell" ? amount : "0",
-      expiration: Math.floor(Date.now() / 1000) + 86400,
-      nonce: "0",
-      feeRateBps: 200,
-      side: side === "buy" ? 0 : 1,
-      signatureType: 0,
-    };
-
-    const signature = await signOrder(order);
-    await createOrder({ order, signature });
-  }
-
-  return (
-    <div>
-      {/* Trading UI */}
-    </div>
-  );
-}
-```
-
-## Environment Variables
-```bash
-# .env.local
-NEXT_PUBLIC_API_URL=https://prediction-market-backend-production-4e85.up.railway.app
-NEXT_PUBLIC_RPC_URL=https://anvil-production-5be1.up.railway.app
-NEXT_PUBLIC_CHAIN_ID=31337
+// Sync blockchain events
+POST /operator/sync-events
+Response: { marketEvents: number; orderEvents: number; fromBlock: number; toBlock: number }
 ```
 
 ## Web3 Integration
 
-### EIP-712 Signing (for orders)
+### 1. Connect Wallet
 ```typescript
-// lib/signature.ts
+import { ethers } from "ethers";
+
+// Connect
+const provider = new ethers.BrowserProvider(window.ethereum);
+const signer = await provider.getSigner();
+const address = await signer.getAddress();
+
+// Get chain info
+const network = await provider.getNetwork();
+const chainId = network.chainId; // Should be 31337 for Anvil
+```
+
+### 2. EIP-712 Order Signing
+```typescript
 const DOMAIN = {
   name: "Polymarket CTF Exchange",
   version: "1",
   chainId: 31337,
+  verifyingContract: "0x0165878A594ca255338adfa4d48449f69242Eb8F"
 };
 
 const ORDER_TYPES = {
@@ -264,8 +174,55 @@ const ORDER_TYPES = {
   ],
 };
 
-export async function signOrder(signer: any, order: any) {
-  return signer._signTypedData(DOMAIN, ORDER_TYPES, order);
+async function signOrder(signer, order) {
+  return await signer.signTypedData(DOMAIN, ORDER_TYPES, order);
+}
+```
+
+### 3. Submit Trade Example
+```typescript
+async function submitTrade(
+  signer: ethers.JsonRpcSigner,
+  market: Market,
+  side: "buy" | "sell",
+  outcome: "yes" | "no",
+  amount: string  // in USDC wei (6 decimals)
+) {
+  const address = await signer.getAddress();
+  
+  // Calculate amounts
+  const tokenId = outcome === "yes" ? market.yesTokenId : market.noTokenId;
+  const price = outcome === "yes" ? market.yesPrice : market.noPrice;
+  const makerAmount = side === "buy" ? amount : "0";
+  const takerAmount = side === "sell" ? amount : "0";
+  
+  // Build order
+  const order = {
+    salt: Date.now().toString(),
+    maker: address,
+    signer: address,
+    taker: "0x0000000000000000000000000000000000000000",
+    tokenId,
+    makerAmount,
+    takerAmount,
+    expiration: Math.floor(Date.now() / 1000) + 86400, // 24h
+    nonce: "0",
+    feeRateBps: 200,
+    side: side === "buy" ? 0 : 1,
+    signatureType: 0,
+  };
+  
+  // Sign
+  const signature = await signOrder(signer, order);
+  
+  // Submit
+  const response = await fetch(`${API_URL}/orders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ order, signature }),
+  });
+  
+  return response.json();
 }
 ```
 
@@ -276,22 +233,108 @@ const CONTRACTS = {
   ConditionalTokens: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
   CTFExchange: "0x0165878A594ca255338adfa4d48449f69242Eb8F",
   UMAAdapter: "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
+  Finder: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+  OptimisticOracle: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
 };
 ```
 
-## Testing
+## React Hook Example
+```typescript
+// hooks/useMarkets.ts
+import { useState, useEffect } from "react";
 
-### Test Accounts (Anvil)
-```
-Account #0: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 (10000 ETH)
-Account #1: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 (10000 ETH)
-Account #2: 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC (10000 ETH)
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+export function useMarkets() {
+  const [markets, setMarkets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API_URL}/markets`)
+      .then((res) => res.json())
+      .then((data) => {
+        setMarkets(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err);
+        setLoading(false);
+      });
+  }, []);
+
+  return { markets, loading, error };
+}
+
+// hooks/useOrderbook.ts
+export function useOrderbook(conditionId: string) {
+  const [orderbook, setOrderbook] = useState(null);
+  
+  useEffect(() => {
+    if (!conditionId) return;
+    
+    const fetchOrderbook = () => {
+      fetch(`${API_URL}/markets/${conditionId}/orderbook`)
+        .then((res) => res.json())
+        .then(setOrderbook);
+    };
+    
+    fetchOrderbook();
+    const interval = setInterval(fetchOrderbook, 5000); // Refresh every 5s
+    
+    return () => clearInterval(interval);
+  }, [conditionId]);
+  
+  return orderbook;
+}
 ```
 
-### Test Market
+## Environment Variables
+```bash
+# .env.local
+NEXT_PUBLIC_API_URL=https://prediction-market-backend-production-4e85.up.railway.app
+NEXT_PUBLIC_RPC_URL=https://anvil-production-5be1.up.railway.app
+NEXT_PUBLIC_CHAIN_ID=31337
+```
+
+## Test Accounts (Anvil)
+```
+# Account 0 - Operator
+Address: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+Private Key: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+
+# Account 1 - Test User
+Address: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+Private Key: 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+
+# Account 2 - Test User
+Address: 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+Private Key: 0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
+```
+
+## Test Market
 ```
 Condition ID: 0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab
 Question ID: 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd12
 Yes Token: 1001
 No Token: 1002
 ```
+
+## Important Notes
+
+1. **No real-time price updates**: Prices come from backend, not on-chain AMM
+2. **Order matching**: Backend matches orders (MINT/MERGE/SWAP), you sign and submit
+3. **Gasless trading**: Orders are gasless, only settlement requires gas
+4. **Expiration**: Markets need expirationDate set for auto-resolution
+5. **UMA oracle**: Markets resolve via UMA Optimistic Oracle (2-hour liveness)
+
+## Error Handling
+
+Common errors:
+- `400` - Invalid order signature
+- `404` - Market not found
+- `500` - Internal error (check UMA oracle status)
+
+## Questions?
+
+Backend repo: https://github.com/jjsentinel/prediction-market-backend

@@ -1,12 +1,64 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { MarketCard } from "@/components/markets/MarketCard";
-import { mockMarkets } from "@/data/mock";
+import { fetchMarkets, fetchCategories, Market } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const categories = ["All", "Crypto", "Politics", "Science", "Technology", "Sports"];
-
 export default function HomePage() {
-  const featuredMarket = mockMarkets[0];
-  const otherMarkets = mockMarkets.slice(1);
+  const [markets, setMarkets] = useState<Market[]>([]);
+  const [categories, setCategories] = useState<{ category: string; count: number }[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        const [marketsData, categoriesData] = await Promise.all([
+          fetchMarkets(),
+          fetchCategories(),
+        ]);
+        setMarkets(marketsData);
+        setCategories([{ category: "All", count: marketsData.length }, ...categoriesData]);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load markets");
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  const filteredMarkets = selectedCategory === "All" 
+    ? markets 
+    : markets.filter(m => m.category === selectedCategory);
+
+  const featuredMarket = filteredMarkets[0];
+  const otherMarkets = filteredMarkets.slice(1);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <p className="text-red-500">{error}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -36,28 +88,55 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Stats */}
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="glass rounded-xl p-4 text-center">
+          <div className="text-2xl font-bold text-primary">{markets.length}</div>
+          <div className="text-sm text-muted-foreground">Active Markets</div>
+        </div>
+        <div className="glass rounded-xl p-4 text-center">
+          <div className="text-2xl font-bold text-primary">
+            ${(markets.reduce((acc, m) => acc + m.volume, 0) / 1e6).toFixed(2)}M
+          </div>
+          <div className="text-sm text-muted-foreground">Total Volume</div>
+        </div>
+        <div className="glass rounded-xl p-4 text-center">
+          <div className="text-2xl font-bold text-primary">
+            ${(markets.reduce((acc, m) => acc + m.liquidity, 0) / 1e6).toFixed(2)}M
+          </div>
+          <div className="text-sm text-muted-foreground">Total Liquidity</div>
+        </div>
+        <div className="glass rounded-xl p-4 text-center">
+          <div className="text-2xl font-bold text-primary">{categories.length - 1}</div>
+          <div className="text-sm text-muted-foreground">Categories</div>
+        </div>
+      </section>
+
       {/* Filters */}
       <section className="flex flex-wrap gap-2">
-        {categories.map((category, index) => (
+        {categories.map((cat) => (
           <button
-            key={category}
+            key={cat.category}
+            onClick={() => setSelectedCategory(cat.category)}
             className={cn(
               "px-4 py-2 rounded-full text-sm font-medium transition-all",
-              index === 0
+              selectedCategory === cat.category
                 ? "bg-primary text-primary-foreground"
                 : "bg-muted text-muted-foreground hover:bg-muted/80"
             )}
           >
-            {category}
+            {cat.category} ({cat.count})
           </button>
         ))}
       </section>
 
       {/* Featured Market */}
-      <section>
-        <h2 className="text-2xl font-bold mb-4">Featured Market</h2>
-        <MarketCard market={featuredMarket} featured />
-      </section>
+      {featuredMarket && (
+        <section>
+          <h2 className="text-2xl font-bold mb-4">Featured Market</h2>
+          <MarketCard market={featuredMarket} featured />
+        </section>
+      )}
 
       {/* Market Grid */}
       <section>

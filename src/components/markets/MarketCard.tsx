@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Market } from "@/data/mock";
+import { Market } from "@/lib/api";
 import { formatCurrency, formatNumber, cn } from "@/lib/utils";
 import { ArrowUpRight, TrendingUp, TrendingDown } from "lucide-react";
 
@@ -11,8 +11,10 @@ interface MarketCardProps {
 }
 
 export function MarketCard({ market, featured }: MarketCardProps) {
-  const yesPercent = market.yesPrice * 100;
-  const noPercent = market.noPrice * 100;
+  const yesPercent = (market.yesPrice || 0.5) * 100;
+  const noPercent = (market.noPrice || 0.5) * 100;
+  const title = market.title || "Untitled Market";
+  const category = market.category || "General";
 
   return (
     <Link
@@ -33,7 +35,7 @@ export function MarketCard({ market, featured }: MarketCardProps) {
         <div className="absolute inset-0 bg-gradient-to-t from-card to-transparent" />
         <div className="absolute top-4 left-4">
           <span className="px-3 py-1 bg-primary/20 text-primary text-xs font-medium rounded-full border border-primary/30">
-            {market.category}
+            {category}
           </span>
         </div>
         {market.status === "RESOLVED" && (
@@ -53,7 +55,7 @@ export function MarketCard({ market, featured }: MarketCardProps) {
             featured ? "text-xl lg:text-2xl" : "text-base"
           )}
         >
-          {market.title}
+          {title}
         </h3>
 
         {/* Probability Bar */}
