@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AreaChart,
   Area,
@@ -10,26 +10,104 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { chartData } from "@/data/mock";
+import { fetchPriceHistory } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-type TimeRange = "1H" | "1D" | "1W";
+type TimeRange = "1h" | "1d" | "1w";
 
-export function PriceChart() {
-  const [activeRange, setActiveRange] = useState<TimeRange>("1D");
-  const data = chartData[activeRange];
+interface PriceChartProps {
+  marketId: string;
+}
+
+export function PriceChart({ marketId }: PriceChartProps) {
+  const [activeRange, setActiveRange] = useState<TimeRange>("1d");
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentPrice, setCurrentPrice] = useState(0.5);
+
+  useEffect(() => {
+    async function loadPriceHistory() {
+      try {
+        setLoading(true);
+        const history = await fetchPriceHistory(marketId, activeRange);
+        
+        if (history.data && history.data.length > 0) {
+          // Transform OHLC data for chart
+          const chartData = history.data.map((d) => ({
+            time: new Date(d.timestamp).toLocaleTimeString([], { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              month: activeRange === "1w" ? 'short' : undefined,
+              day: activeRange === "1w" ? 'numeric' : undefined,
+            }),
+            price: d.close,
+            open: d.open,
+            high: d.high,
+            low: d.low,
+          }));
+          setData(chartData);
+          setCurrentPrice(chartData[chartData.length - 1]?.price || 0.5);
+        } else {
+          // Generate mock data if no history
+          setData(generateMockData(activeRange));
+          setCurrentPrice(0.5);
+        }
+      } catch (error) {
+        console.error("Failed to load price history:", error);
+        setData(generateMockData(activeRange));
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadPriceHistory();
+  }, [marketId, activeRange]);
+
+  function generateMockData(range: TimeRange) {
+    const points = range === "1h" ? 12 : range === "1d" ? 24 : 7;
+    const data = [];
+    let price = 0.5;
+    
+    for (let i = 0; i < points; i++) {
+      price += (Math.random() - 0.5) * 0.05;
+      price = Math.max(0.01, Math.min(0.99, price));
+      
+      const time = range === "1w" 
+        ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]
+        : `${String(i).padStart(2, "0")}:00`;
+        
+      data.push({ time, price });
+    }
+    return data;
+  }
+
+  const priceChange = data.length > 1 
+    ? ((data[data.length - 1].price - data[0].price) / data[0].price) * 100 
+    : 0;
+
+  if (loading) {
+    return (
+      <div className="h-64 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-card border border-border rounded-2xl p-6">
+    <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <span className="text-sm text-muted-foreground">Current Price</span>
-          <div className="text-2xl font-bold">0.65 USDC</div>
-          <div className="text-sm text-emerald-500">+5.2% (24h)</div>
+          <div className="text-2xl font-bold">{currentPrice.toFixed(2)} USDC</div>
+          <div className={cn(
+            "text-sm",
+            priceChange >= 0 ? "text-emerald-500" : "text-red-500"
+          )}>
+            {priceChange >= 0 ? "+" : ""}{priceChange.toFixed(2)}% ({activeRange})
+          </div>
         </div>
         <div className="flex gap-1">
-          {(["1H", "1D", "1W"] as TimeRange[]).map((range) => (
+          {(["1h", "1d", "1w"] as TimeRange[]).map((range) => (
             <button
               key={range}
               onClick={() => setActiveRange(range)}
@@ -40,7 +118,7 @@ export function PriceChart() {
                   : "text-muted-foreground hover:bg-muted"
               )}
             >
-              {range}
+              {range.toUpperCase()}
             </button>
           ))}
         </div>
@@ -64,7 +142,7 @@ export function PriceChart() {
               tickLine={false}
             />
             <YAxis
-              domain={[0.5, 0.7]}
+              domain={["auto", "auto"]}
               stroke="#64748b"
               fontSize={12}
               tickLine={false}
@@ -76,8 +154,7 @@ export function PriceChart() {
                 border: "1px solid #334155",
                 borderRadius: "8px",
               }}
-              formatter={(value: number) => [value.toFixed(2), "Price"]
-              }
+              formatter={(value: number) => [value.toFixed(2), "Price"]}
             />
             <Area
               type="monotone"

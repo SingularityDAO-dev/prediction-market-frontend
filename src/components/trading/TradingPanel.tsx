@@ -1,20 +1,152 @@
 "use client";
 
 import { useState } from "react";
+import { useWallet } from "@/lib/wallet";
 import { formatCurrency, cn } from "@/lib/utils";
-import { ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowUp, ArrowDown, Loader2 } from "lucide-react";
+import { Market } from "@/lib/api";
 
-export function TradingPanel() {
+interface TradingPanelProps {
+  market: Market;
+  yesPrice: number;
+  noPrice: number;
+}
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://prediction-market-backend-production-4e85.up.railway.app";
+
+export function TradingPanel({ market, yesPrice, noPrice }: TradingPanelProps) {
+  const { address, isConnected } = useWallet();
   const [activeTab, setActiveTab] = useState<"buy" | "sell">("buy");
-  const [leverage, setLeverage] = useState(1);
   const [amount, setAmount] = useState("");
   const [outcome, setOutcome] = useState<"yes" | "no">("yes");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  const maxLeverage = 10;
-  const estimatedShares = amount ? parseFloat(amount) * leverage : 0;
+  const tokenId = outcome === "yes" ? market.yesTokenId : market.noTokenId;
+  const price = outcome === "yes" ? yesPrice : noPrice;
+  const estimatedShares = amount ? parseFloat(amount) / price : 0;
+  const side = activeTab === "buy" ? 0 : 1; // 0=BUY, 1=SELL
+
+  async function submitOrder() {
+    if (!isConnected || !address) {
+      setError("Please connect your wallet first");
+      return;
+    }
+
+    if (!amount || parseFloat(amount) <= 0) {
+      setError("Please enter a valid amount");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      // Check if MetaMask is installed
+      if (!window.ethereum) {
+        throw new Error("MetaMask not installed");
+      }
+
+      // Get chain ID
+      const chainId = await window.ethereum.request({ method: "eth_chainId" });
+      
+      // Build order data
+      const salt = Date.now().toString();
+      const makerAmount = Math.floor(parseFloat(amount) * 1e6).toString(); // USDC has 6 decimals
+      const takerAmount = Math.floor(estimatedShares * 1e6).toString();
+      const expiration = Math.floor(Date.now() / 1000) + 86400; // 24 hours
+      
+      const orderData = {
+        salt,
+        maker: address,
+        signer: address,
+        taker: "0x0000000000000000000000000000000000000000", // Public order
+        tokenId,
+        makerAmount,
+        takerAmount,
+        expiration: expiration.toString(),
+        nonce: "0",
+        feeRateBps: 200, // 2%
+        side,
+        signatureType: 0, // EOA
+      };
+
+      // Create EIP-712 domain
+      const domain = {
+        name: "Polymarket CTF Exchange",
+        version: "1",
+        chainId: parseInt(chainId, 16),
+        verifyingContract: "0x0165878A594ca255338adfa4d48449f69242Eb8F", // CTFExchange address
+      };
+
+      // EIP-712 types
+      const types = {
+        Order: [
+          { name: "salt", type: "uint256" },
+          { name: "maker", type: "address" },
+          { name: "signer", type: "address" },
+          { name: "taker", type: "address" },
+          { name: "tokenId", type: "uint256" },
+          { name: "makerAmount", type: "uint256" },
+          { name: "takerAmount", type: "uint256" },
+          { name: "expiration", type: "uint256" },
+          { name: "nonce", type: "uint256" },
+          { name: "feeRateBps", type: "uint256" },
+          { name: "side", type: "uint8" },
+          { name: "signatureType", type: "uint8" },
+        ],
+      };
+
+      // Request signature from user
+      const signature = await window.ethereum.request({
+        method: "eth_signTypedData_v4",
+        params: [address, JSON.stringify({ domain, types, primaryType: "Order", message: orderData })],
+      });
+
+      // Submit order to API
+      const response = await fetch(`${API_BASE_URL}/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order: orderData, signature }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to submit order");
+      }
+
+      const result = await response.json();
+      setSuccess(`Order submitted! Hash: ${result.order?.orderHash?.slice(0, 20)}...`);
+      setAmount("");
+    } catch (err) {
+      console.error("Order submission error:", err);
+      setError(err instanceof Error ? err.message : "Failed to submit order");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!isConnected) {
+    return (
+      <div className="bg-card border border-border rounded-2xl p-6">
+        <h2 className="text-lg font-semibold mb-4">Trade</h2>
+        <p className="text-muted-foreground mb-4">Connect your wallet to start trading</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-semibold"
+        >
+          Connect Wallet
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-card border border-border rounded-2xl p-6">
+      <h2 className="text-lg font-semibold mb-4">Trade</h2>
+
       {/* Tabs */}
       <div className="flex rounded-xl bg-muted p-1 mb-6">
         <button
@@ -54,7 +186,7 @@ export function TradingPanel() {
         >
           <div className="flex items-center justify-between">
             <span className="font-semibold">Yes</span>
-            <span className="text-emerald-500">65¢</span>
+            <span className="text-emerald-500">{(yesPrice * 100).toFixed(0)}¢</span>
           </div>
         </button>
         <button
@@ -68,30 +200,9 @@ export function TradingPanel() {
         >
           <div className="flex items-center justify-between">
             <span className="font-semibold">No</span>
-            <span className="text-red-500">35¢</span>
+            <span className="text-red-500">{(noPrice * 100).toFixed(0)}¢</span>
           </div>
         </button>
-      </div>
-
-      {/* Leverage Slider */}
-      <div className="mb-6">
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-sm text-muted-foreground">Leverage</span>
-          <span className="text-sm font-semibold">{leverage}x</span>
-        </div>
-        <input
-          type="range"
-          min="1"
-          max={maxLeverage}
-          step="0.5"
-          value={leverage}
-          onChange={(e) => setLeverage(parseFloat(e.target.value))}
-          className="w-full"
-        />
-        <div className="flex justify-between text-xs text-muted-foreground mt-1">
-          <span>1x</span>
-          <span>{maxLeverage}x</span>
-        </div>
       </div>
 
       {/* Amount Input */}
@@ -103,7 +214,8 @@ export function TradingPanel() {
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0.00"
-            className="w-full px-4 py-3 bg-muted rounded-xl border border-border focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-lg"
+            disabled={loading}
+            className="w-full px-4 py-3 bg-muted rounded-xl border border-border focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-lg disabled:opacity-50"
           />
           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground">
             USDC
@@ -120,30 +232,50 @@ export function TradingPanel() {
           </span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Max Profit</span>
-          <span className="font-semibold text-emerald-500">
-            {formatCurrency(estimatedShares * (outcome === "yes" ? 0.35 : 0.65))}
-          </span>
+          <span className="text-muted-foreground">Price</span>
+          <span className="font-semibold">{(price * 100).toFixed(0)}¢</span>
         </div>
       </div>
 
+      {/* Error/Success Messages */}
+      {error && (
+        <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl mb-4 text-red-500 text-sm">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl mb-4 text-emerald-500 text-sm">
+          {success}
+        </div>
+      )}
+
       {/* Submit Button */}
       <button
+        onClick={submitOrder}
+        disabled={loading || !amount}
         className={cn(
-          "w-full py-4 rounded-xl font-semibold text-white transition-all",
+          "w-full py-4 rounded-xl font-semibold text-white transition-all flex items-center justify-center gap-2",
           activeTab === "buy"
             ? "bg-emerald-500 hover:bg-emerald-600"
             : "bg-red-500 hover:bg-red-600",
-          !amount && "opacity-50 cursor-not-allowed"
+          (loading || !amount) && "opacity-50 cursor-not-allowed"
         )}
-        disabled={!amount}
       >
-        {activeTab === "buy" ? "Buy" : "Sell"} {outcome.toUpperCase()}
+        {loading ? (
+          <>
+            <Loader2 className="w-5 h-5 animate-spin" />
+            Signing...
+          </>
+        ) : (
+          <>
+            {activeTab === "buy" ? "Buy" : "Sell"} {outcome.toUpperCase()}
+          </>
+        )}
       </button>
 
       {/* Fee Info */}
       <p className="text-center text-xs text-muted-foreground mt-4">
-        Fee: 2% • Slippage tolerance: 0.5%
+        Fee: 2% • Orders are signed with EIP-712
       </p>
     </div>
   );
