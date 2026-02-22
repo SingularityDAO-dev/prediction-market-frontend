@@ -46,10 +46,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     
     if (window.ethereum) {
       try {
-        const accounts = await window.ethereum.request({ method: "eth_accounts" });
-        if (accounts.length > 0) {
+        const accounts = await window.ethereum.request({ method: "eth_accounts" }) as string[];
+        if (accounts && accounts.length > 0) {
           setAddress(accounts[0]);
-          const chain = await window.ethereum.request({ method: "eth_chainId" });
+          const chain = await window.ethereum.request({ method: "eth_chainId" }) as string;
           setChainId(parseInt(chain, 16));
         }
       } catch (error) {
@@ -58,17 +58,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  function handleAccountsChanged(accounts: string[]) {
-    if (accounts.length === 0) {
-      setAddress(null);
-    } else {
-      setAddress(accounts[0]);
+  function handleAccountsChanged(...args: unknown[]) {
+    const accounts = args[0] as string[];
+    if (accounts && Array.isArray(accounts)) {
+      if (accounts.length === 0) {
+        setAddress(null);
+      } else {
+        setAddress(accounts[0]);
+      }
     }
   }
 
-  function handleChainChanged(chainId: string) {
-    setChainId(parseInt(chainId, 16));
-    window.location.reload();
+  function handleChainChanged(...args: unknown[]) {
+    const chainId = args[0] as string;
+    if (chainId && typeof chainId === "string") {
+      setChainId(parseInt(chainId, 16));
+      window.location.reload();
+    }
   }
 
   async function connect() {
@@ -83,11 +89,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       const accounts = await window.ethereum.request({
         method: "eth_requestAccounts",
-      });
+      }) as string[];
       
-      if (accounts.length > 0) {
+      if (accounts && accounts.length > 0) {
         setAddress(accounts[0]);
-        const chain = await window.ethereum.request({ method: "eth_chainId" });
+        const chain = await window.ethereum.request({ method: "eth_chainId" }) as string;
         setChainId(parseInt(chain, 16));
       }
     } catch (error) {
