@@ -162,7 +162,10 @@ export function PriceChart({ marketId }: PriceChartProps) {
                 border: "1px solid #334155",
                 borderRadius: "8px",
               }}
-              formatter={(value: number) => [value.toFixed(2), "Price"]}
+              formatter={(value: number | undefined) => [
+                value !== undefined ? value.toFixed(2) : "0.00",
+                "Price"
+              ]}
             />
             <Area
               type="monotone"
