@@ -241,7 +241,7 @@ export default function TestOrdersPage() {
                 {result.status === "error" && "❌ Error"}
               </span>
             </div>
-            {result.data && (
+            {result.data !== undefined && (
               <div className="mt-2">
                 <p className="text-sm text-muted-foreground mb-1">Response:</p>
                 <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto max-h-64 overflow-y-auto">
