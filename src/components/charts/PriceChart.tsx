@@ -19,9 +19,17 @@ interface PriceChartProps {
   marketId: string;
 }
 
+interface ChartDataPoint {
+  time: string;
+  price: number;
+  open?: number;
+  high?: number;
+  low?: number;
+}
+
 export function PriceChart({ marketId }: PriceChartProps) {
   const [activeRange, setActiveRange] = useState<TimeRange>("1d");
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<ChartDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPrice, setCurrentPrice] = useState(0.5);
 

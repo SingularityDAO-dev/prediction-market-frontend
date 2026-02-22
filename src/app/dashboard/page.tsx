@@ -1,6 +1,6 @@
 import { portfolioData, leaderboardData } from "@/data/mock";
 import { formatCurrency, formatPercentage, cn } from "@/lib/utils";
-import { Trophy, TrendingUp, TrendingDown, Target } from "lucide-react";
+import { Trophy } from "lucide-react";
 
 export default function DashboardPage() {
   const totalPnl = portfolioData.reduce((sum, item) => sum + item.pnl, 0);

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useWallet } from "@/lib/wallet";
-import { fetchMarket, fetchOrderbook, fetchTrades, Market, Orderbook } from "@/lib/api";
+import { fetchMarket, fetchOrderbook, fetchTrades, Market, Orderbook, Trade } from "@/lib/api";
 import { PriceChart } from "@/components/charts/PriceChart";
 import { TradingPanel } from "@/components/trading/TradingPanel";
 import { OrderBook } from "@/components/trading/OrderBook";
@@ -11,10 +11,9 @@ import { formatCurrency } from "@/lib/utils";
 
 export default function MarketPage() {
   const params = useParams();
-  const { address } = useWallet();
   const [market, setMarket] = useState<Market | null>(null);
   const [orderbook, setOrderbook] = useState<Orderbook | null>(null);
-  const [trades, setTrades] = useState<any[]>([]);
+  const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

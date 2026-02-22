@@ -4,14 +4,13 @@ import { useState } from "react";
 import { useWallet } from "@/lib/wallet";
 import { 
   fetchOrderbook, 
-  fetchTrades, 
-  Market 
+  fetchTrades
 } from "@/lib/api";
 
 interface OrderTestResult {
   endpoint: string;
   status: "idle" | "loading" | "success" | "error";
-  data?: any;
+  data?: unknown;
   error?: string;
 }
 
