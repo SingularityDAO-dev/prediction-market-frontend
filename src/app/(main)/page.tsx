@@ -1,5 +1,5 @@
-import MainLayout from "./MainLayout";
-import HomePage from "./page";
+import MainLayout from "../MainLayout";
+import HomePage from "../page";
 
 export default function Page() {
   return (
