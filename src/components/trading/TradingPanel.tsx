@@ -66,7 +66,7 @@ export function TradingPanel({ market, yesPrice, noPrice }: TradingPanelProps) {
         tokenId,
         makerAmount,
         takerAmount,
-        expiration: expiration.toString(),
+        expiration,
         nonce: "0",
         feeRateBps: 200, // 2%
         side,

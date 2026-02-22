@@ -133,8 +133,8 @@ export function PriceChart({ marketId }: PriceChartProps) {
       </div>
 
       {/* Chart */}
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
+      <div className="h-64 min-h-[256px] w-full">
+        <ResponsiveContainer width="100%" height="100%" minHeight={256}>
           <AreaChart data={data}>
             <defs>
               <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
