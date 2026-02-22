@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { useWallet } from "@/lib/wallet";
 import { fetchMarket, fetchOrderbook, fetchTrades, Market, Orderbook, Trade } from "@/lib/api";
 import { PriceChart } from "@/components/charts/PriceChart";
 import { TradingPanel } from "@/components/trading/TradingPanel";
