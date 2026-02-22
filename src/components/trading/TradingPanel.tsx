@@ -50,7 +50,7 @@ export function TradingPanel({ market, yesPrice, noPrice }: TradingPanelProps) {
       }
 
       // Get chain ID
-      const chainId = await window.ethereum.request({ method: "eth_chainId" });
+      const chainId = await window.ethereum.request({ method: "eth_chainId" }) as string;
       
       // Build order data
       const salt = Date.now().toString();
