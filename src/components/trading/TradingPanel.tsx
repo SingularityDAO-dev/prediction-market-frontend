@@ -50,7 +50,44 @@ export function TradingPanel({ market, yesPrice, noPrice }: TradingPanelProps) {
       }
 
       // Get chain ID
-      const chainId = await window.ethereum.request({ method: "eth_chainId" }) as string;
+      const chainIdHex = await window.ethereum.request({ method: "eth_chainId" }) as string;
+      const chainId = parseInt(chainIdHex, 16);
+      
+      // Check if on correct network (Anvil: 31337)
+      const EXPECTED_CHAIN_ID = 31337;
+      if (chainId !== EXPECTED_CHAIN_ID) {
+        try {
+          await window.ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: `0x${EXPECTED_CHAIN_ID.toString(16)}` }],
+          });
+        } catch (switchError: unknown) {
+          // If chain doesn't exist, try to add it
+          if ((switchError as { code: number }).code === 4902) {
+            await window.ethereum.request({
+              method: "wallet_addEthereumChain",
+              params: [{
+                chainId: `0x${EXPECTED_CHAIN_ID.toString(16)}`,
+                chainName: "Anvil Local",
+                rpcUrls: [process.env.NEXT_PUBLIC_RPC_URL || "http://localhost:8545"],
+                nativeCurrency: {
+                  name: "ETH",
+                  symbol: "ETH",
+                  decimals: 18,
+                },
+              }],
+            });
+          } else {
+            throw new Error(`Please switch to chain ID ${EXPECTED_CHAIN_ID} (Anvil)`);
+          }
+        }
+        // Re-fetch chain ID after switch
+        const newChainIdHex = await window.ethereum.request({ method: "eth_chainId" }) as string;
+        const newChainId = parseInt(newChainIdHex, 16);
+        if (newChainId !== EXPECTED_CHAIN_ID) {
+          throw new Error(`Please switch to chain ID ${EXPECTED_CHAIN_ID} (Anvil)`);
+        }
+      }
       
       // Build order data
       const salt = Date.now().toString();
@@ -77,7 +114,7 @@ export function TradingPanel({ market, yesPrice, noPrice }: TradingPanelProps) {
       const domain = {
         name: "Polymarket CTF Exchange",
         version: "1",
-        chainId: parseInt(chainId, 16),
+        chainId: EXPECTED_CHAIN_ID,
         verifyingContract: "0x0165878A594ca255338adfa4d48449f69242Eb8F", // CTFExchange address
       };
 
@@ -99,11 +136,11 @@ export function TradingPanel({ market, yesPrice, noPrice }: TradingPanelProps) {
         ],
       };
 
-      // Request signature from user
+      // Request signature from user - MetaMask expects object, not JSON string
       const signature = await window.ethereum.request({
         method: "eth_signTypedData_v4",
-        params: [address, JSON.stringify({ domain, types, primaryType: "Order", message: orderData })],
-      });
+        params: [address, { domain, types, primaryType: "Order", message: orderData }],
+      }) as string;
 
       // Submit order to API
       const response = await fetch(`${API_BASE_URL}/orders`, {

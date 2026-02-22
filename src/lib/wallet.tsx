@@ -138,6 +138,24 @@ declare global {
       request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
       on: (event: string, callback: (...args: unknown[]) => void) => void;
       removeListener: (event: string, callback: (...args: unknown[]) => void) => void;
+      isMetaMask?: boolean;
     };
   }
+}
+
+// Helper to safely get ethereum provider (handles multiple wallet conflicts)
+export function getEthereumProvider() {
+  if (typeof window === "undefined") return null;
+  
+  // Try to get the primary ethereum provider
+  if (window.ethereum) {
+    // If multiple providers, prefer MetaMask
+    if (window.ethereum.isMetaMask) {
+      return window.ethereum;
+    }
+    // Otherwise return the first one
+    return window.ethereum;
+  }
+  
+  return null;
 }
