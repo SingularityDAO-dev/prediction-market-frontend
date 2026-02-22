@@ -1,3 +1,5 @@
+"use client";
+
 import MainLayout from "../MainLayout";
 import HomePage from "../page";
 
