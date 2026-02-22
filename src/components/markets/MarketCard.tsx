@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { Market } from "@/lib/api";
-import { formatCurrency, formatNumber, cn } from "@/lib/utils";
-import { ArrowUpRight, TrendingUp, TrendingDown } from "lucide-react";
+import { formatCurrency, cn } from "@/lib/utils";
+import { ArrowUpRight } from "lucide-react";
 
 interface MarketCardProps {
   market: Market;

@@ -1,7 +1,7 @@
 "use client";
 
 import { Orderbook } from "@/lib/api";
-import { cn, formatNumber } from "@/lib/utils";
+import { formatNumber } from "@/lib/utils";
 
 interface OrderBookProps {
   orderbook: Orderbook | null;

@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useWallet } from "@/lib/wallet";
-import { formatCurrency, cn } from "@/lib/utils";
-import { ArrowUp, ArrowDown, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Loader2 } from "lucide-react";
 import { Market } from "@/lib/api";
 
 interface TradingPanelProps {
